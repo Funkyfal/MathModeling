@@ -40,9 +40,6 @@ public class Main {
 
         System.out.println("\n== 2) Макларен-Марсальи (K=" + K + ", D1=МКМ(beta=" + beta1 + "), D2=МКМ(beta=" + beta2 + ")) ==");
         analyzeSample(sampleMM, df);
-
-        System.out.println("\n(Критерий Колмогорова: p-value вычисляется по классическому разложению, χ²: использовано 10 равных ячеек -> df=9).");
-        System.out.println("Уровень значимости ε = 0.05\n");
     }
 
     static void analyzeSample(double[] sample, DecimalFormat df) {
@@ -55,16 +52,22 @@ public class Main {
         // Критерий Колмогорова
         KSTest.Result ks = KSTest.kolmogorovSmirnovTest(sample);
         System.out.println("\nKolmogorov-Smirnov:");
-        System.out.println(" D = " + df.format(ks.D) + " , sqrt(n)*D = " + df.format(ks.sqrtNtimesD));
-        System.out.println(" p-value ≈ " + df.format(ks.pValue));
-        System.out.println(" Решение (α=0.05): " + (ks.pValue >= 0.05 ? "не отвергаем H0 (согласие)" : "отвергаем H0 (несовпадение)"));
+        double alpha = 0.05;
+        double K_alpha = 1.358; // для alpha=0.05 (двусторонний тест)
+        double Dcrit = K_alpha / Math.sqrt(n);
+        System.out.println(" K-S критическое D (α=" + alpha + ") = " + df.format(Dcrit));
+        System.out.println(" K-S статистика: " + ks.D);
+        System.out.println(" Решение по критическому значению: " + (ks.D > Dcrit ? "отвергаем H0" : "не отвергаем H0"));
 
         // χ^2 Пирсона — разбиение на 10 равных ячеек (ожидание = n/10)
         int bins = 10;
         ChiSquareTest.Result ch = ChiSquareTest.chiSquareTestUniform(sample, bins);
-        System.out.println("\nChi-square (Pearson), bins=" + bins + " (df=" + (bins-1) + "):");
-        System.out.println(" χ^2 = " + df.format(ch.chi2) + " , p-value ≈ " + df.format(ch.pValue));
-        System.out.println(" Решение (α=0.05): " + (ch.pValue >= 0.05 ? "не отвергаем H0 (согласие)" : "отвергаем H0 (несовпадение)"));
+        int dfChi = (bins - 1);
+        System.out.println("\nChi-square:");
+        double chi2Crit = 16.9190; // табличное значение для df=9, alpha=0.05
+        System.out.println(" Chi-square критическое (df=" + dfChi + ", α=" + alpha + ") = " + df.format(chi2Crit));
+        System.out.println(" X² статистика: " + ch.chi2);
+        System.out.println(" Решение по критическому значению: " + (ch.chi2 > chi2Crit ? "отвергаем H0" : "не отвергаем H0"));
     }
 
     static double mean(double[] a) {
@@ -130,7 +133,7 @@ public class Main {
 
     // ---------- Kolmogorov-Smirnov ----------
     static class KSTest {
-        static class Result { double D; double sqrtNtimesD; double pValue; }
+        static class Result { double D; double sqrtNtimesD; }
         // Для проверки равномерности на [0,1)
         static Result kolmogorovSmirnovTest(double[] sample) {
             int n = sample.length;
@@ -143,12 +146,12 @@ public class Main {
                 double xi = s[i];
                 D = Math.max(D, Math.max(Math.abs(Fi - xi), Math.abs(Fim1 - xi)));
             }
+
             double y = Math.sqrt(n) * D;
             double p = ksPvalue(y);
             Result r = new Result();
             r.D = D;
             r.sqrtNtimesD = y;
-            r.pValue = p;
             return r;
         }
 
@@ -173,7 +176,7 @@ public class Main {
 
     // ---------- Chi-square test for uniformity ----------
     static class ChiSquareTest {
-        static class Result { double chi2; double pValue; int df; }
+        static class Result { double chi2; int df; }
         // Разбиваем [0,1) на 'bins' равных интервалов
         static Result chiSquareTestUniform(double[] sample, int bins) {
             int n = sample.length;
@@ -191,93 +194,10 @@ public class Main {
                 chi2 += diff * diff / expected;
             }
             int df = bins - 1;
-            double p = 1.0 - Gamma.regularizedGammaP(df/2.0, chi2/2.0); // p = tail probability
             Result r = new Result();
             r.chi2 = chi2;
-            r.pValue = p;
             r.df = df;
             return r;
-        }
-    }
-
-    // ---------- Gamma functions + regularized incomplete gamma (needed for chi2 p-value) ----------
-    // Implemented using Lanczos approximation and standard series/continued fraction
-    static class Gamma {
-        private static final double[] lanczosCoefficients = {
-                0.99999999999980993,
-                676.5203681218851,
-                -1259.1392167224028,
-                771.32342877765313,
-                -176.61502916214059,
-                12.507343278686905,
-                -0.13857109526572012,
-                9.9843695780195716e-6,
-                1.5056327351493116e-7
-        };
-        private static final double EPS = 1e-14;
-        private static final double PI = Math.PI;
-
-        // Gamma function (Lanczos)
-        static double gamma(double z) {
-            if (z < 0.5) {
-                // Reflection formula
-                return PI / (Math.sin(PI * z) * gamma(1 - z));
-            } else {
-                z -= 1;
-                double x = lanczosCoefficients[0];
-                for (int i = 1; i < lanczosCoefficients.length; i++) x += lanczosCoefficients[i] / (z + i);
-                double t = z + lanczosCoefficients.length - 0.5;
-                return Math.sqrt(2 * PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
-            }
-        }
-
-        // Regularized lower incomplete gamma P(a,x) using series (for x < a+1) and continued fraction (for x >= a+1)
-        static double regularizedGammaP(double a, double x) {
-            if (x < 0 || a <= 0) return 0.0;
-            if (x == 0) return 0.0;
-            if (x < a + 1.0) {
-                // series representation
-                double ap = a;
-                double sum = 1.0 / a;
-                double del = sum;
-                int n = 1;
-                while (Math.abs(del) > Math.abs(sum) * EPS) {
-                    ap += 1.0;
-                    del *= x / ap;
-                    sum += del;
-                    n++;
-                    if (n > 10000) break;
-                }
-                double res = sum * Math.exp(-x + a * Math.log(x) - Math.log(gamma(a)));
-                return res;
-            } else {
-                // continued fraction representation for Q = 1 - P, compute Q then return 1-Q
-                double gln = Math.log(gamma(a));
-                double b = x + 1.0 - a;
-                double c = 1.0 / 1e-300;
-                double d = 1.0 / b;
-                double h = d;
-                int i = 1;
-                while (true) {
-                    double an = -i * (i - a);
-                    b += 2.0;
-                    d = an * d + b;
-                    if (Math.abs(d) < 1e-300) d = 1e-300;
-                    c = b + an / c;
-                    if (Math.abs(c) < 1e-300) c = 1e-300;
-                    d = 1.0 / d;
-                    double delta = d * c;
-                    h *= delta;
-                    if (Math.abs(delta - 1.0) < EPS) break;
-                    i++;
-                    if (i > 10000) break;
-                }
-                double Q = Math.exp(-x + a * Math.log(x) - gln) * h;
-                double P = 1.0 - Q;
-                if (P < 0) P = 0;
-                if (P > 1) P = 1;
-                return P;
-            }
         }
     }
 }
