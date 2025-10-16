@@ -111,10 +111,7 @@ $$
 ## Код на языке Java
 
 ```java
-// Lab2DiscreteNoPValue.java
-// Компиляция: javac Lab2DiscreteNoPValue.java
-// Запуск: java Lab2DiscreteNoPValue
-// Monte-Carlo: java Lab2DiscreteNoPValue --mc 500
+// монте-карло: java Lab2DiscreteNoPValue --mc 500
 
 import java.util.*;
 import java.text.DecimalFormat;
@@ -122,60 +119,59 @@ import java.text.DecimalFormat;
 public class Main {
     static final DecimalFormat F = new DecimalFormat("0.00000");
 
-    // Таблица критических значений chi-square для alpha = 0.05, df = 1..50 (95%-квантиль)
-    // Cтандартные табличные значения.
+    // критические значения Хи квадрат для альфа = 0.05, df = 1..50
     static final double[] CHI2_CRIT_95 = {
-            0.0,       // dummy for index 0
-            3.841458820694124,  // df=1
-            5.991464547107979,  // df=2
-            7.814727903251179,  // 3
-            9.487729036781154,  // 4
-            11.070497693516351, // 5
-            12.591587243743977, // 6
-            14.067140449340169, // 7
-            15.50731305586545,  // 8
-            16.918977604620448, // 9
-            18.307038053275146, //10
-            19.67513657172878,  //11
-            21.02606981748379,  //12
-            22.36203208523671,  //13
-            23.68479109926933,  //14
-            24.99579013972857,  //15
-            26.29622760432735,  //16
-            27.587111572777997, //17
-            28.86929910618511,  //18
-            30.143527233257095, //19
-            31.410432844059243, //20
-            32.67056460143622,  //21
-            33.92445196154039,  //22
-            35.17246397113603,  //23
-            36.4150293853458,   //24
-            37.65246635017661,  //25
-            38.88501775351129,  //26
-            40.11299851614626,  //27
-            41.33648085985938,  //28
-            42.55589263286622,  //29
-            43.77300142962844,  //30
-            44.98529962098502,  //31
-            46.19409214294103,  //32
-            47.39961439341192,  //33
-            48.60203406748361,  //34
-            49.80151291732866,  //35
-            50.99821960095802,  //36
-            52.19231101606287,  //37
-            53.38393672238559,  //38
-            54.57324603920106,  //39
-            55.76037415395297,  //40
-            56.945451017375,    //41
-            58.128589006431,    //42
-            59.309893186018,    //43
-            60.489462225262,    //44
-            61.667387742617,    //45
-            62.843754294396,    //46
-            64.018641422735,    //47
-            65.192123026177,    //48
-            66.364267137463,    //49
-            67.535133070786     //50
+            0.0,
+            3.841458820694124,
+            5.991464547107979,
+            7.814727903251179,
+            9.487729036781154,
+            11.070497693516351,
+            12.591587243743977,
+            14.067140449340169,
+            15.50731305586545,
+            16.918977604620448,
+            18.307038053275146,
+            19.67513657172878,
+            21.02606981748379,
+            22.36203208523671,
+            23.68479109926933,
+            24.99579013972857,
+            26.29622760432735,
+            27.587111572777997,
+            28.86929910618511,
+            30.143527233257095,
+            31.410432844059243,
+            32.67056460143622,
+            33.92445196154039,
+            35.17246397113603,
+            36.4150293853458,
+            37.65246635017661,
+            38.88501775351129,
+            40.11299851614626,
+            41.33648085985938,
+            42.55589263286622,
+            43.77300142962844,
+            44.98529962098502,
+            46.19409214294103,
+            47.39961439341192,
+            48.60203406748361,
+            49.80151291732866,
+            50.99821960095802,
+            52.19231101606287,
+            53.38393672238559,
+            54.57324603920106,
+            55.76037415395297,
+            56.945451017375,
+            58.128589006431,
+            59.309893186018,
+            60.489462225262,
+            61.667387742617,
+            62.843754294396,
+            64.018641422735,
+            65.192123026177,
+            66.364267137463,
+            67.535133070786
     };
 
     public static void main(String[] args) {
@@ -192,24 +188,26 @@ public class Main {
             return;
         }
 
-        Random rng = new Random();
+        Random rnd = new Random();
 
-        int[] bernSample = generateBernoulliSample(n, pBern, rng);
-        int[] nbSample = generateNegBinomialSample(n, rNegBin, pNegBin, rng);
+        int[] bernSample = generateBernoulliSample(n, pBern, rnd);
+        int[] nbSample = generateNegBinomialSample(n, rNegBin, pNegBin, rnd);
 
-        System.out.println("=== Однократный прогон (n = " + n + ") ===\n");
+        System.out.println("однократный прогон при n = " + n + "\n");
 
-        System.out.println("Бернулли Bi(1, p=" + pBern + "):");
+        System.out.println("Бернулли (1, p=" + pBern + "):");
         analyzeAndTestBernoulli(bernSample, pBern, alpha);
 
-        System.out.println("\nОтрицательное биномиальное NB(r=" + rNegBin + ", p=" + pNegBin + "):");
+        System.out.println("\nОтрицательное биномиальное (r=" + rNegBin + ", p=" + pNegBin + "):");
         analyzeAndTestNegBin(nbSample, rNegBin, pNegBin, alpha);
     }
 
-    // ----------------- ГЕНЕРАЦИЯ -----------------
+    //генерация
     static int[] generateBernoulliSample(int n, double p, Random rng) {
         int[] s = new int[n];
-        for (int i = 0; i < n; i++) s[i] = (rng.nextDouble() < p) ? 1 : 0;
+        for (int i = 0; i < n; i++) {
+            s[i] = (rng.nextDouble() < p) ? 1 : 0;
+        }
         return s;
     }
 
@@ -219,60 +217,70 @@ public class Main {
             int successes = 0;
             int failures = 0;
             while (successes < r) {
-                if (rng.nextDouble() < p) successes++;
-                else failures++;
+                if (rng.nextDouble() < p) {
+                    successes++;
+                } else {
+                    failures++;
+                }
             }
             s[i] = failures;
         }
         return s;
     }
 
-    // ----------------- СТАТИСТИКА -----------------
+    //статистика
     static double mean(int[] x) {
         double sum = 0;
-        for (int v : x) sum += v;
+        for (int v : x) {
+            sum += v;
+        }
         return sum / x.length;
     }
+
     static double sampleVariance(int[] x) {
         int n = x.length;
         double m = mean(x);
         double s = 0;
-        for (int v : x) s += (v - m) * (v - m);
+        for (int v : x) {
+            s += (v - m) * (v - m);
+        }
         return s / (n - 1);
     }
 
-    // ----------------- БЕРНУЛЛИ: анализ и тест -----------------
+    //бернулли
     static void analyzeAndTestBernoulli(int[] sample, double p, double alpha) {
         int n = sample.length;
         double m = mean(sample);
         double var = sampleVariance(sample);
         double theorMean = p;
         double theorVar = p * (1 - p);
-        System.out.println("Sample mean = " + F.format(m) + " (theoretical " + F.format(theorMean) + ")");
-        System.out.println("Sample var  = " + F.format(var) + " (theoretical " + F.format(theorVar) + ")");
+        System.out.println("среднее значение (матожидание) = " + F.format(m) + " (теоретически " + F.format(theorMean) + ")");
+        System.out.println("дисперсия  = " + F.format(var) + " (теоретически " + F.format(theorVar) + ")");
 
         int c0 = 0;
-        for (int v : sample) if (v == 0) c0++;
+        for (int v : sample) {
+            if (v == 0) c0++;
+        }
         int c1 = n - c0;
         double exp0 = n * (1 - p);
         double exp1 = n * p;
         double chi2 = (c0 - exp0) * (c0 - exp0) / exp0 + (c1 - exp1) * (c1 - exp1) / exp1;
 
-        int df = 1; // 2 categories - 1 parameter fixed -> df = 1
+        int df = 1; //2 бина => степень свободы = 1
         double crit = chi2Critical(df, alpha);
-        System.out.println("\nChi2 (Bernoulli): statistic = " + F.format(chi2) + ", critical(" + alpha + ", df=" + df + ") = " + F.format(crit));
-        System.out.println("Decision: " + (chi2 <= crit ? "Accept H0 (fits)" : "Reject H0"));
+        System.out.println("\nХи квадрат (бернулли): статистика = " + F.format(chi2) + ", критическое(" + alpha + ", СС=" + df + ") = " + F.format(crit));
+        System.out.println("решение: " + (chi2 <= crit ? "принимаем гипотезу (подходит)" : "отклоняем гипотезу"));
     }
 
-    // ----------------- Негативное биномиальное: анализ и тест -----------------
+    //негативное биномиальное
     static void analyzeAndTestNegBin(int[] sample, int r, double p, double alpha) {
         int n = sample.length;
         double m = mean(sample);
         double var = sampleVariance(sample);
         double theorMean = r * (1 - p) / p;
         double theorVar = r * (1 - p) / (p * p);
-        System.out.println("Sample mean = " + F.format(m) + " (theoretical " + F.format(theorMean) + ")");
-        System.out.println("Sample var  = " + F.format(var) + " (theoretical " + F.format(theorVar) + ")");
+        System.out.println("среднее значение (матожидание) = " + F.format(m) + " (теоретически " + F.format(theorMean) + ")");
+        System.out.println("дисперсия  = " + F.format(var) + " (теоретически " + F.format(theorVar) + ")");
 
         List<Double> pmf = new ArrayList<>();
         double p0 = Math.pow(p, r);
@@ -282,15 +290,19 @@ public class Main {
         int maxIter = 10000;
         while (tail < 1.0 - 1e-12 && i < maxIter) {
             double prev = pmf.get(i);
-            double next = prev * ((double)(i + r) / (i + 1)) * (1 - p);
+            double next = prev * ((double) (i + r) / (i + 1)) * (1 - p);
             pmf.add(next);
             tail += next;
             i++;
-            if (i > 5000) break;
+            if (i > 5000) {
+                break;
+            }
         }
 
         double sumProb = 0;
-        for (double q : pmf) sumProb += q;
+        for (double q : pmf) {
+            sumProb += q;
+        }
         if (sumProb < 1.0) {
             double last = pmf.get(pmf.size() - 1);
             pmf.set(pmf.size() - 1, last + (1.0 - sumProb));
@@ -304,15 +316,21 @@ public class Main {
         Arrays.fill(valToBin, -1);
         for (int bi = 0; bi < bins.size(); bi++) {
             for (int v = bins.get(bi).from; v <= bins.get(bi).to; v++) {
-                if (v <= maxIndex) valToBin[v] = bi;
+                if (v <= maxIndex) {
+                    valToBin[v] = bi;
+                }
             }
         }
         for (int v : sample) {
             int bi;
             if (v <= maxIndex) {
                 bi = valToBin[v];
-                if (bi == -1) bi = bins.size() - 1;
-            } else bi = bins.size() - 1;
+                if (bi == -1) {
+                    bi = bins.size() - 1;
+                }
+            } else {
+                bi = bins.size() - 1;
+            }
             obs[bi]++;
         }
 
@@ -323,19 +341,29 @@ public class Main {
             double diff = o - expected;
             chi2 += diff * diff / expected;
         }
-        int df = Math.max(1, bins.size() - 1); // degrees of freedom
+        int df = Math.max(1, bins.size() - 1);//степени свободы
         double crit = chi2Critical(df, alpha);
 
-        System.out.println("\nChi2 (NegBin): statistic = " + F.format(chi2) + ", df = " + df + ", critical(" + alpha + ") = " + F.format(crit));
-        System.out.println("Bins used (from..to) and expected counts:");
+        System.out.println("\nХи квадрат (отрицательный биномиальный): статистика = " + F.format(chi2) + ", СС = " + df + ", критическое(" + alpha + ") = " + F.format(crit));
+        System.out.println("бинов использовано (от..до) и предполагаемое количество:");
         for (int bi = 0; bi < bins.size(); bi++) {
-            System.out.println("  [" + bins.get(bi).from + ".." + bins.get(bi).to + "]  expected=" + F.format(bins.get(bi).prob * n) + "  observed=" + obs[bi]);
+            System.out.println("  [" + bins.get(bi).from + ".." + bins.get(bi).to + "]  ожидаем=" + F.format(bins.get(bi).prob * n) + "  наблюдаем=" + obs[bi]);
         }
-        System.out.println("Decision: " + (chi2 <= crit ? "Accept H0 (fits)" : "Reject H0"));
+        System.out.println("Решение: " + (chi2 <= crit ? "принимаем гипотезу (подходит)" : "отклоняем гипотезу"));
     }
 
-    // helper: produce bins such that expected >= minExpected
-    static class Bin { int from, to; double prob; Bin(int f,int t,double p){from=f;to=t;prob=p;} }
+    //помогает сделать наполнение бинов >= минимального количества
+    static class Bin {
+        int from, to;
+        double prob;
+
+        Bin(int f, int t, double p) {
+            from = f;
+            to = t;
+            prob = p;
+        }
+    }
+
     static List<Bin> makeBinsFromPmf(List<Double> pmf, int n, double minExpected) {
         List<Bin> bins = new ArrayList<>();
         int i = 0;
@@ -366,7 +394,7 @@ public class Main {
         return bins;
     }
 
-    // ----------------- MONTE-CARLO -----------------
+    //монте-карло
     static void monteCarloEstimateTypeI(int n, double pBern, int rNegBin, double pNegBin, double alpha, int Nexp) {
         Random rng = new Random();
         int rejectBern = 0;
@@ -374,18 +402,25 @@ public class Main {
         for (int t = 0; t < Nexp; t++) {
             int[] b = generateBernoulliSample(n, pBern, rng);
             int[] nb = generateNegBinomialSample(n, rNegBin, pNegBin, rng);
-            if (!chi2AcceptBernoulli(b, pBern, alpha)) rejectBern++;
-            if (!chi2AcceptNegBinomial(nb, rNegBin, pNegBin, alpha)) rejectNegBin++;
+            if (!chi2AcceptBernoulli(b, pBern, alpha)) {
+                rejectBern++;
+            }
+            if (!chi2AcceptNegBinomial(nb, rNegBin, pNegBin, alpha)) {
+                rejectNegBin++;
+            }
         }
-        System.out.println("MonteCarlo Nexp=" + Nexp + ", n=" + n);
-        System.out.println("Bernoulli: empirical Type I error = " + F.format((double)rejectBern / Nexp) + " (rejects " + rejectBern + "/" + Nexp + ")");
-        System.out.println("NegBin:   empirical Type I error = " + F.format((double)rejectNegBin / Nexp) + " (rejects " + rejectNegBin + "/" + Nexp + ")");
+        System.out.println("Монте-Карло Nexp=" + Nexp + ", n=" + n);
+        System.out.println("Бернулли: ошибка первого рода = " + F.format((double) rejectBern / Nexp) + " (отклоняем " + rejectBern + "/" + Nexp + ")");
+        System.out.println("Отрицательно Биномиальное:   ошибка первого рода = " + F.format((double) rejectNegBin / Nexp) + " (отклоняем " + rejectNegBin + "/" + Nexp + ")");
     }
 
     static boolean chi2AcceptBernoulli(int[] sample, double p, double alpha) {
         int n = sample.length;
         int c0 = 0;
-        for (int v : sample) if (v == 0) c0++;
+        for (int v : sample)
+            if (v == 0) {
+                c0++;
+            }
         int c1 = n - c0;
         double exp0 = n * (1 - p);
         double exp1 = n * p;
@@ -403,14 +438,18 @@ public class Main {
         int maxIter = 10000;
         while (tail < 1.0 - 1e-12 && i < maxIter) {
             double prev = pmf.get(i);
-            double next = prev * ((double)(i + r) / (i + 1)) * (1 - p);
+            double next = prev * ((double) (i + r) / (i + 1)) * (1 - p);
             pmf.add(next);
             tail += next;
             i++;
-            if (i > 5000) break;
+            if (i > 5000) {
+                break;
+            }
         }
         double sumProb = 0;
-        for (double q : pmf) sumProb += q;
+        for (double q : pmf) {
+            sumProb += q;
+        }
         if (sumProb < 1.0) {
             double last = pmf.get(pmf.size() - 1);
             pmf.set(pmf.size() - 1, last + (1.0 - sumProb));
@@ -423,7 +462,9 @@ public class Main {
         Arrays.fill(valToBin, -1);
         for (int bi = 0; bi < bins.size(); bi++) {
             for (int v = bins.get(bi).from; v <= bins.get(bi).to; v++) {
-                if (v <= maxIndex) valToBin[v] = bi;
+                if (v <= maxIndex) {
+                    valToBin[v] = bi;
+                }
             }
         }
         int[] obs = new int[bins.size()];
@@ -431,8 +472,12 @@ public class Main {
             int bi;
             if (v <= maxIndex) {
                 bi = valToBin[v];
-                if (bi == -1) bi = bins.size() - 1;
-            } else bi = bins.size() - 1;
+                if (bi == -1) {
+                    bi = bins.size() - 1;
+                }
+            } else {
+                bi = bins.size() - 1;
+            }
             obs[bi]++;
         }
         double chi2 = 0;
@@ -447,10 +492,12 @@ public class Main {
         return chi2 <= crit;
     }
 
-    // ----------------- КРИТИЧЕСКОЕ ЗНАЧЕНИЕ -----------------
+    //критическое значение
     static double chi2Critical(int df, double alpha) {
-        // alpha assumed 0.05 for this table
-        if (df >= 1 && df < CHI2_CRIT_95.length) return CHI2_CRIT_95[df];
+        //альфа = 0.05
+        if (df >= 1 && df < CHI2_CRIT_95.length) {
+            return CHI2_CRIT_95[df];
+        }
         double z95 = 1.6448536269514722; // quantile z_{0.95}
         return df + z95 * Math.sqrt(2.0 * df);
     }

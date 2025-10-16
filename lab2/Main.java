@@ -1,387 +1,391 @@
-// Lab2_Discrete.java
-// Лабораторная №2 — моделирование дискретных СВ (вариант 2)
-//  - Bernoulli Bi(1,p), p=0.5
-//  - Negative Binomial (r=5, p=0.25) (число неудач до r-й успеха)
-// Выполняет: генерацию n реализаций, оценки mean/var, χ^2 тест и оценку ошибки I рода
+// монте-карло: java Lab2DiscreteNoPValue --mc 500
 
 import java.util.*;
 import java.text.DecimalFormat;
 
 public class Main {
-    // Настройки
-    static final int N = 1000;                // размер выборки
-    static final int N_TRIALS = 1000;         // число повторных прогонов для оценки ошибки I рода
-    static final double ALPHA = 0.05;         // уровень значимости
-    static final DecimalFormat df = new DecimalFormat("#0.00000");
+    static final DecimalFormat F = new DecimalFormat("0.00000");
 
-    static final Random rnd = new Random(12345); // фиксированный seed для воспроизводимости
+    // критические значения Хи квадрат для альфа = 0.05, df = 1..50
+    static final double[] CHI2_CRIT_95 = {
+            0.0,
+            3.841458820694124,
+            5.991464547107979,
+            7.814727903251179,
+            9.487729036781154,
+            11.070497693516351,
+            12.591587243743977,
+            14.067140449340169,
+            15.50731305586545,
+            16.918977604620448,
+            18.307038053275146,
+            19.67513657172878,
+            21.02606981748379,
+            22.36203208523671,
+            23.68479109926933,
+            24.99579013972857,
+            26.29622760432735,
+            27.587111572777997,
+            28.86929910618511,
+            30.143527233257095,
+            31.410432844059243,
+            32.67056460143622,
+            33.92445196154039,
+            35.17246397113603,
+            36.4150293853458,
+            37.65246635017661,
+            38.88501775351129,
+            40.11299851614626,
+            41.33648085985938,
+            42.55589263286622,
+            43.77300142962844,
+            44.98529962098502,
+            46.19409214294103,
+            47.39961439341192,
+            48.60203406748361,
+            49.80151291732866,
+            50.99821960095802,
+            52.19231101606287,
+            53.38393672238559,
+            54.57324603920106,
+            55.76037415395297,
+            56.945451017375,
+            58.128589006431,
+            59.309893186018,
+            60.489462225262,
+            61.667387742617,
+            62.843754294396,
+            64.018641422735,
+            65.192123026177,
+            66.364267137463,
+            67.535133070786
+    };
 
     public static void main(String[] args) {
-        // Параметры варианта 2
+        int n = 1000;
+        double alpha = 0.05;
+
         double pBern = 0.5;
-        int rNB = 5;
-        double pNB = 0.25;
+        int rNegBin = 5;
+        double pNegBin = 0.25;
 
-        System.out.println("Лабораторная 2 — Вариант 2");
-        System.out.println("Параметры: Bernoulli p=" + pBern + ", NegBin r=" + rNB + " p=" + pNB + "\n");
+        if (args.length >= 2 && args[0].equals("--mc")) {
+            int Nexp = Integer.parseInt(args[1]);
+            monteCarloEstimateTypeI(n, pBern, rNegBin, pNegBin, alpha, Nexp);
+            return;
+        }
 
-        // 1) Single-run: сгенерировать выборки и проанализировать
-        int[] sampleBern = genBernoulliSample(N, pBern);
-        int[] sampleNB = genNegBinomialSample(N, rNB, pNB);
+        Random rnd = new Random();
 
-        System.out.println("=== ОДИН ПРОГОН (n=" + N + ") ===\n");
+        int[] bernSample = generateBernoulliSample(n, pBern, rnd);
+        int[] nbSample = generateNegBinomialSample(n, rNegBin, pNegBin, rnd);
 
-        // Анализ Бернулли
-        System.out.println("-- Бернулли Bi(1," + pBern + ") --");
-        analyzeDiscreteSample(sampleBern, buildBernoulliProbabilities(pBern), "Bernoulli");
+        System.out.println("однократный прогон при n = " + n + "\n");
 
-        // Анализ отрицательного биномиального
-        System.out.println("\n-- Отрицательное биномиальное NB(r=" + rNB + ", p=" + pNB + ") --");
-        double[] probsNB = buildNegBinomProbabilities(rNB, pNB, N); // построй pmf до разумного k
-        analyzeDiscreteSample(sampleNB, probsNB, "NegBin");
+        System.out.println("Бернулли (1, p=" + pBern + "):");
+        analyzeAndTestBernoulli(bernSample, pBern, alpha);
 
-        // Перекрестные проверки: каждую выборку тестируем обоими критериями
-        System.out.println("\n=== ПЕРЕКРЁСТНЫЕ ПРОВЕРКИ (каждая выборка обоими критериями) ===");
-        System.out.println("Bernoulli sample tested against Bernoulli and NegBin:");
-        crossCheck(sampleBern, buildBernoulliProbabilities(pBern), probsNB);
-
-        System.out.println("\nNegBin sample tested against NegBin and Bernoulli:");
-        crossCheck(sampleNB, probsNB, buildBernoulliProbabilities(pBern));
-
-        // 2) Оценка эмпирической вероятности ошибки I рода (повторные прогоны)
-        System.out.println("\n=== ОЦЕНКА ЭМПИРИЧЕСКОЙ ОШИБКИ I РОДА (N_TRIALS=" + N_TRIALS + ") ===");
-        double alphaEstBern = estimateTypeIError_Bernoulli(pBern, N, N_TRIALS);
-        System.out.println("Empirical Type I error for Bernoulli test: " + df.format(alphaEstBern) + " (target " + ALPHA + ")");
-
-        double alphaEstNB = estimateTypeIError_NegBin(rNB, pNB, N, N_TRIALS);
-        System.out.println("Empirical Type I error for NegBin test:    " + df.format(alphaEstNB) + " (target " + ALPHA + ")");
-
-        System.out.println("\nГотово.");
+        System.out.println("\nОтрицательное биномиальное (r=" + rNegBin + ", p=" + pNegBin + "):");
+        analyzeAndTestNegBin(nbSample, rNegBin, pNegBin, alpha);
     }
 
-    // ---------------- Генераторы ----------------
-
-    static int[] genBernoulliSample(int n, double p) {
-        int[] a = new int[n];
-        for (int i = 0; i < n; i++) a[i] = (rnd.nextDouble() < p) ? 1 : 0;
-        return a;
+    //генерация
+    static int[] generateBernoulliSample(int n, double p, Random rng) {
+        int[] s = new int[n];
+        for (int i = 0; i < n; i++) {
+            s[i] = (rng.nextDouble() < p) ? 1 : 0;
+        }
+        return s;
     }
 
-    // Negative binomial: число неудач до r-й успеха (support 0,1,2,...)
-    // Генерация последовательным моделированием Бернулли trials
-    static int[] genNegBinomialSample(int n, int r, double p) {
-        int[] a = new int[n];
+    static int[] generateNegBinomialSample(int n, int r, double p, Random rng) {
+        int[] s = new int[n];
         for (int i = 0; i < n; i++) {
             int successes = 0;
             int failures = 0;
             while (successes < r) {
-                if (rnd.nextDouble() < p) successes++; else failures++;
+                if (rng.nextDouble() < p) {
+                    successes++;
+                } else {
+                    failures++;
+                }
             }
-            a[i] = failures;
+            s[i] = failures;
         }
-        return a;
-    }
-
-    // ---------------- PMF строители ----------------
-
-    // Bernoulli probabilities for values {0,1}
-    static double[] buildBernoulliProbabilities(double p) {
-        return new double[]{1.0 - p, p};
-    }
-
-    // Negative binomial PMF array up to k such that cumulative >= 1 - eps or up to maxK
-    static double[] buildNegBinomProbabilities(int r, double p, int maxN) {
-        // want enough bins so that tail probability * N < ~5 (чтобы можно было валидно сделать chi2)
-        double eps = 1e-12;
-        ArrayList<Double> probs = new ArrayList<>();
-        // pmf(0) = p^r
-        double pmf = Math.pow(p, r);
-        probs.add(pmf);
-        double cum = pmf;
-        int k = 0;
-        while (cum < 1.0 - eps && k < Math.max(1000, maxN*3)) {
-            // recurrence: pmf_{k+1} = pmf_k * (k + r)/(k + 1) * (1-p)
-            k++;
-            pmf = pmf * ((double)(k + r -1) / (double)k) * (1.0 - p); // careful: using k with shift
-            // Note: because we started k index at 0, the recurrence is arranged accordingly
-            probs.add(pmf);
-            cum += pmf;
-            if (k > 2000) break;
-        }
-        // convert to array
-        double[] arr = new double[probs.size()];
-        for (int i = 0; i < arr.length; i++) arr[i] = probs.get(i);
-        // If total < 1, assign the rest to the last bin (rare)
-        double total = 0;
-        for (double v : arr) total += v;
-        if (total < 1.0) {
-            arr[arr.length - 1] += (1.0 - total);
-        }
-        return arr;
-    }
-
-    // ----------------- Анализ выборки -----------------
-
-    static void analyzeDiscreteSample(int[] sample, double[] modelProbs, String modelName) {
-        int n = sample.length;
-
-        // sample stats (mean, unbiased variance)
-        double mean = 0.0;
-        for (int v : sample) mean += v;
-        mean /= n;
-
-        double var = 0.0;
-        for (int v : sample) var += (v - mean) * (v - mean);
-        var /= (n - 1.0);
-
-        // theoretical mean/var for model (if modelName known)
-        double theoMean = theoreticalMean(modelProbs);
-        double theoVar = theoreticalVariance(modelProbs, theoMean);
-
-        System.out.println("Выборка размера n=" + n);
-        System.out.println("  sample mean = " + df.format(mean) + "    theoretical mean = " + df.format(theoMean));
-        System.out.println("  sample var  = " + df.format(var)  + "    theoretical var  = " + df.format(theoVar));
-
-        // Build chi-square test bins for model
-        ChiSquareTest.Result ch = ChiSquareTest.chiSquareTestDiscrete(sample, modelProbs);
-        System.out.println("Chi-square test vs " + modelName + ": chi2=" + df.format(ch.chi2) + ", p=" + df.format(ch.pValue)
-                + ", df=" + ch.df + " -> " + (ch.pValue >= ALPHA ? "не отвергаем H0" : "отвергаем H0"));
-    }
-
-    // Cross-check: test sample against modelA and modelB
-    static void crossCheck(int[] sample, double[] modelA, double[] modelB) {
-        ChiSquareTest.Result chA = ChiSquareTest.chiSquareTestDiscrete(sample, modelA);
-        System.out.println(" Test vs model A: chi2=" + df.format(chA.chi2) + ", p=" + df.format(chA.pValue)
-                + " -> " + (chA.pValue >= ALPHA ? "не отвергаем" : "отвергаем"));
-        ChiSquareTest.Result chB = ChiSquareTest.chiSquareTestDiscrete(sample, modelB);
-        System.out.println(" Test vs model B: chi2=" + df.format(chB.chi2) + ", p=" + df.format(chB.pValue)
-                + " -> " + (chB.pValue >= ALPHA ? "не отвергаем" : "отвергаем"));
-    }
-
-    // ----------------- Оценка ошибки I рода (моделируем много выборок из модели, считаем долю отклонений) -----------------
-
-    static double estimateTypeIError_Bernoulli(double p, int n, int trials) {
-        int rejects = 0;
-        double[] model = buildBernoulliProbabilities(p);
-        for (int t = 0; t < trials; t++) {
-            int[] s = genBernoulliSample(n, p);
-            ChiSquareTest.Result r = ChiSquareTest.chiSquareTestDiscrete(s, model);
-            if (r.pValue < ALPHA) rejects++;
-        }
-        return ((double) rejects) / trials;
-    }
-
-    static double estimateTypeIError_NegBin(int r, double p, int n, int trials) {
-        int rejects = 0;
-        double[] model = buildNegBinomProbabilities(r, p, n);
-        for (int t = 0; t < trials; t++) {
-            int[] s = genNegBinomialSample(n, r, p);
-            ChiSquareTest.Result rres = ChiSquareTest.chiSquareTestDiscrete(s, model);
-            if (rres.pValue < ALPHA) rejects++;
-        }
-        return ((double) rejects) / trials;
-    }
-
-    // ----------------- Utility: theoretical mean/var from pmf -----------------
-
-    static double theoreticalMean(double[] pmf) {
-        double mean = 0.0;
-        for (int k = 0; k < pmf.length; k++) mean += k * pmf[k];
-        return mean;
-    }
-    static double theoreticalVariance(double[] pmf, double mean) {
-        double s = 0.0;
-        for (int k = 0; k < pmf.length; k++) s += (k - mean) * (k - mean) * pmf[k];
         return s;
     }
 
-    // ----------------- Chi-square test for discrete distributions -----------------
-    // Автоматически объединяет ячейки с малыми ожидаемыми значениями (E < 5)
+    //статистика
+    static double mean(int[] x) {
+        double sum = 0;
+        for (int v : x) {
+            sum += v;
+        }
+        return sum / x.length;
+    }
 
-    static class ChiSquareTest {
-        static class Result { double chi2; double pValue; int df; }
+    static double sampleVariance(int[] x) {
+        int n = x.length;
+        double m = mean(x);
+        double s = 0;
+        for (int v : x) {
+            s += (v - m) * (v - m);
+        }
+        return s / (n - 1);
+    }
 
-        static Result chiSquareTestDiscrete(int[] sample, double[] modelPmf) {
-            int n = sample.length;
+    //бернулли
+    static void analyzeAndTestBernoulli(int[] sample, double p, double alpha) {
+        int n = sample.length;
+        double m = mean(sample);
+        double var = sampleVariance(sample);
+        double theorMean = p;
+        double theorVar = p * (1 - p);
+        System.out.println("среднее значение (матожидание) = " + F.format(m) + " (теоретически " + F.format(theorMean) + ")");
+        System.out.println("дисперсия  = " + F.format(var) + " (теоретически " + F.format(theorVar) + ")");
 
-            // 1) determine max value in sample
-            int maxVal = 0;
-            for (int v : sample) if (v > maxVal) maxVal = v;
+        int c0 = 0;
+        for (int v : sample) {
+            if (v == 0) c0++;
+        }
+        int c1 = n - c0;
+        double exp0 = n * (1 - p);
+        double exp1 = n * p;
+        double chi2 = (c0 - exp0) * (c0 - exp0) / exp0 + (c1 - exp1) * (c1 - exp1) / exp1;
 
-            // 2) define initial prob array covering both modelPmf and sample max: extend model if necessary
-            int kMax = Math.max(modelPmf.length - 1, maxVal);
-            ArrayList<Double> probs = new ArrayList<>();
-            for (int k = 0; k <= kMax; k++) {
-                double p = (k < modelPmf.length) ? modelPmf[k] : 0.0;
-                probs.add(p);
+        int df = 1; //2 бина => степень свободы = 1
+        double crit = chi2Critical(df, alpha);
+        System.out.println("\nХи квадрат (бернулли): статистика = " + F.format(chi2) + ", критическое(" + alpha + ", СС=" + df + ") = " + F.format(crit));
+        System.out.println("решение: " + (chi2 <= crit ? "принимаем гипотезу (подходит)" : "отклоняем гипотезу"));
+    }
+
+    //негативное биномиальное
+    static void analyzeAndTestNegBin(int[] sample, int r, double p, double alpha) {
+        int n = sample.length;
+        double m = mean(sample);
+        double var = sampleVariance(sample);
+        double theorMean = r * (1 - p) / p;
+        double theorVar = r * (1 - p) / (p * p);
+        System.out.println("среднее значение (матожидание) = " + F.format(m) + " (теоретически " + F.format(theorMean) + ")");
+        System.out.println("дисперсия  = " + F.format(var) + " (теоретически " + F.format(theorVar) + ")");
+
+        List<Double> pmf = new ArrayList<>();
+        double p0 = Math.pow(p, r);
+        pmf.add(p0);
+        double tail = p0;
+        int i = 0;
+        int maxIter = 10000;
+        while (tail < 1.0 - 1e-12 && i < maxIter) {
+            double prev = pmf.get(i);
+            double next = prev * ((double) (i + r) / (i + 1)) * (1 - p);
+            pmf.add(next);
+            tail += next;
+            i++;
+            if (i > 5000) {
+                break;
             }
-            // if model has tail prob beyond modelPmf, it was absorbed into last bin when building modelPmf
+        }
 
-            // 3) expected counts
-            ArrayList<Double> expected = new ArrayList<>();
-            for (double p : probs) expected.add(p * n);
+        double sumProb = 0;
+        for (double q : pmf) {
+            sumProb += q;
+        }
+        if (sumProb < 1.0) {
+            double last = pmf.get(pmf.size() - 1);
+            pmf.set(pmf.size() - 1, last + (1.0 - sumProb));
+        }
 
-            // 4) Merge bins with expected < 5 (starting from the end)
-            // Ensure last bin includes tail
-            boolean merged;
-            do {
-                merged = false;
-                for (int i = expected.size() - 1; i >= 0; i--) {
-                    if (expected.get(i) < 5.0 && expected.size() > 1) {
-                        // merge with previous (i-1). If i==0 can't merge left, merge to right (but right doesn't exist)
-                        if (i == 0) {
-                            // merge with right
-                            double newExp = expected.get(0) + expected.get(1);
-                            expected.set(1, newExp);
-                            expected.remove(0);
-                            double newP = probs.get(0) + probs.get(1);
-                            probs.set(1, newP);
-                            probs.remove(0);
-                        } else {
-                            double newExp = expected.get(i-1) + expected.get(i);
-                            expected.set(i-1, newExp);
-                            expected.remove(i);
-                            double newP = probs.get(i-1) + probs.get(i);
-                            probs.set(i-1, newP);
-                            probs.remove(i);
-                        }
-                        merged = true;
-                        break;
-                    }
+        List<Bin> bins = makeBinsFromPmf(pmf, n, 5.0);
+
+        int[] obs = new int[bins.size()];
+        int maxIndex = pmf.size() - 1;
+        int[] valToBin = new int[maxIndex + 1];
+        Arrays.fill(valToBin, -1);
+        for (int bi = 0; bi < bins.size(); bi++) {
+            for (int v = bins.get(bi).from; v <= bins.get(bi).to; v++) {
+                if (v <= maxIndex) {
+                    valToBin[v] = bi;
                 }
-            } while (merged);
-
-            // 5) Now compute observed counts per resulting bin
-            int bins = probs.size();
-            int[] obs = new int[bins];
-            // Build boundaries: we track original k ranges for bins
-            // We'll reconstruct bin boundaries by scanning cumulative probs of original k
-            // Simpler: we track mapping original k -> bin by greedily filling bins amounts using expected counts structure.
-            // Build bin ranges:
-            int origK = 0;
-            int[] kToBin = new int[maxVal + 1 + 0]; // map original k to bin index up to observed maxVal
-            Arrays.fill(kToBin, -1);
-            int binIdx = 0;
-            double runningP = 0.0;
-            // We'll assign consecutive original k to bins in same order as probs array
-            for (int b = 0; b < probs.size(); b++) {
-                // determine how many original ks this bin corresponds to by summing modelPmf (or zero) until cumulative equals probs[b]
-                double targetP = probs.get(b);
-                double acc = 0.0;
-                while ((origK <= maxVal) && (acc < targetP - 1e-15)) {
-                    double p = (origK < modelPmf.length) ? modelPmf[origK] : 0.0;
-                    acc += p;
-                    if (origK <= maxVal) {
-                        kToBin[origK] = b;
-                    }
-                    origK++;
-                    // safety
-                    if (origK > maxVal + 10000) break;
+            }
+        }
+        for (int v : sample) {
+            int bi;
+            if (v <= maxIndex) {
+                bi = valToBin[v];
+                if (bi == -1) {
+                    bi = bins.size() - 1;
                 }
-                binIdx++;
+            } else {
+                bi = bins.size() - 1;
             }
-            // For any leftover original ks upto maxVal with -1 assign to last bin
-            for (int k = 0; k <= maxVal; k++) if (kToBin[k] == -1) kToBin[k] = probs.size() - 1;
+            obs[bi]++;
+        }
 
-            // Count observed
-            for (int v : sample) {
-                int b = (v <= maxVal) ? kToBin[v] : probs.size() - 1;
-                if (b < 0) b = probs.size() - 1;
-                obs[b]++;
-            }
+        double chi2 = 0;
+        for (int bi = 0; bi < bins.size(); bi++) {
+            double expected = bins.get(bi).prob * n;
+            double o = obs[bi];
+            double diff = o - expected;
+            chi2 += diff * diff / expected;
+        }
+        int df = Math.max(1, bins.size() - 1);//степени свободы
+        double crit = chi2Critical(df, alpha);
 
-            // 6) compute chi2
-            double chi2 = 0.0;
-            for (int b = 0; b < probs.size(); b++) {
-                double E = expected.get(b);
-                double O = obs[b];
-                double diff = O - E;
-                chi2 += diff * diff / E;
-            }
+        System.out.println("\nХи квадрат (отрицательный биномиальный): статистика = " + F.format(chi2) + ", СС = " + df + ", критическое(" + alpha + ") = " + F.format(crit));
+        System.out.println("бинов использовано (от..до) и предполагаемое количество:");
+        for (int bi = 0; bi < bins.size(); bi++) {
+            System.out.println("  [" + bins.get(bi).from + ".." + bins.get(bi).to + "]  ожидаем=" + F.format(bins.get(bi).prob * n) + "  наблюдаем=" + obs[bi]);
+        }
+        System.out.println("Решение: " + (chi2 <= crit ? "принимаем гипотезу (подходит)" : "отклоняем гипотезу"));
+    }
 
-            int df = probs.size() - 1;
-            double pValue = 1.0 - Gamma.regularizedGammaP(df / 2.0, chi2 / 2.0);
+    //помогает сделать наполнение бинов >= минимального количества
+    static class Bin {
+        int from, to;
+        double prob;
 
-            Result res = new Result();
-            res.chi2 = chi2;
-            res.pValue = pValue;
-            res.df = df;
-            return res;
+        Bin(int f, int t, double p) {
+            from = f;
+            to = t;
+            prob = p;
         }
     }
 
-    // ----------------- Gamma functions (Lanczos) для p-value χ^2 -----------------
-    static class Gamma {
-        private static final double[] lanczosCoefficients = {
-                0.99999999999980993,
-                676.5203681218851,
-                -1259.1392167224028,
-                771.32342877765313,
-                -176.61502916214059,
-                12.507343278686905,
-                -0.13857109526572012,
-                9.9843695780195716e-6,
-                1.5056327351493116e-7
-        };
-        private static final double EPS = 1e-14;
-        private static final double PI = Math.PI;
-
-        static double gamma(double z) {
-            if (z < 0.5) {
-                return PI / (Math.sin(PI * z) * gamma(1 - z));
+    static List<Bin> makeBinsFromPmf(List<Double> pmf, int n, double minExpected) {
+        List<Bin> bins = new ArrayList<>();
+        int i = 0;
+        int M = pmf.size();
+        while (i < M) {
+            double accProb = 0;
+            int start = i;
+            while (i < M && accProb * n < minExpected) {
+                accProb += pmf.get(i);
+                i++;
+            }
+            if (i >= M) {
+                bins.add(new Bin(start, M - 1, accProb));
+                break;
             } else {
-                z -= 1;
-                double x = lanczosCoefficients[0];
-                for (int i = 1; i < lanczosCoefficients.length; i++) x += lanczosCoefficients[i] / (z + i);
-                double t = z + lanczosCoefficients.length - 0.5;
-                return Math.sqrt(2 * PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+                bins.add(new Bin(start, i - 1, accProb));
             }
         }
-
-        static double regularizedGammaP(double a, double x) {
-            if (x < 0 || a <= 0) return 0.0;
-            if (x == 0) return 0.0;
-            if (x < a + 1.0) {
-                double ap = a;
-                double sum = 1.0 / a;
-                double del = sum;
-                int n = 1;
-                while (Math.abs(del) > Math.abs(sum) * EPS) {
-                    ap += 1.0;
-                    del *= x / ap;
-                    sum += del;
-                    n++;
-                    if (n > 10000) break;
-                }
-                double res = sum * Math.exp(-x + a * Math.log(x) - Math.log(gamma(a)));
-                return res;
-            } else {
-                double gln = Math.log(gamma(a));
-                double b = x + 1.0 - a;
-                double c = 1.0 / 1e-300;
-                double d = 1.0 / b;
-                double h = d;
-                int i = 1;
-                while (true) {
-                    double an = -i * (i - a);
-                    b += 2.0;
-                    d = an * d + b;
-                    if (Math.abs(d) < 1e-300) d = 1e-300;
-                    c = b + an / c;
-                    if (Math.abs(c) < 1e-300) c = 1e-300;
-                    d = 1.0 / d;
-                    double delta = d * c;
-                    h *= delta;
-                    if (Math.abs(delta - 1.0) < EPS) break;
-                    i++;
-                    if (i > 10000) break;
-                }
-                double Q = Math.exp(-x + a * Math.log(x) - gln) * h;
-                double P = 1.0 - Q;
-                if (P < 0) P = 0;
-                if (P > 1) P = 1;
-                return P;
+        if (bins.size() >= 2) {
+            Bin last = bins.get(bins.size() - 1);
+            if (last.prob * n < minExpected) {
+                Bin prev = bins.get(bins.size() - 2);
+                Bin merged = new Bin(prev.from, last.to, prev.prob + last.prob);
+                bins.set(bins.size() - 2, merged);
+                bins.remove(bins.size() - 1);
             }
         }
+        return bins;
+    }
+
+    //монте-карло
+    static void monteCarloEstimateTypeI(int n, double pBern, int rNegBin, double pNegBin, double alpha, int Nexp) {
+        Random rng = new Random();
+        int rejectBern = 0;
+        int rejectNegBin = 0;
+        for (int t = 0; t < Nexp; t++) {
+            int[] b = generateBernoulliSample(n, pBern, rng);
+            int[] nb = generateNegBinomialSample(n, rNegBin, pNegBin, rng);
+            if (!chi2AcceptBernoulli(b, pBern, alpha)) {
+                rejectBern++;
+            }
+            if (!chi2AcceptNegBinomial(nb, rNegBin, pNegBin, alpha)) {
+                rejectNegBin++;
+            }
+        }
+        System.out.println("Монте-Карло Nexp=" + Nexp + ", n=" + n);
+        System.out.println("Бернулли: ошибка первого рода = " + F.format((double) rejectBern / Nexp) + " (отклоняем " + rejectBern + "/" + Nexp + ")");
+        System.out.println("Отрицательно Биномиальное:   ошибка первого рода = " + F.format((double) rejectNegBin / Nexp) + " (отклоняем " + rejectNegBin + "/" + Nexp + ")");
+    }
+
+    static boolean chi2AcceptBernoulli(int[] sample, double p, double alpha) {
+        int n = sample.length;
+        int c0 = 0;
+        for (int v : sample)
+            if (v == 0) {
+                c0++;
+            }
+        int c1 = n - c0;
+        double exp0 = n * (1 - p);
+        double exp1 = n * p;
+        double chi2 = (c0 - exp0) * (c0 - exp0) / exp0 + (c1 - exp1) * (c1 - exp1) / exp1;
+        double crit = chi2Critical(1, alpha);
+        return chi2 <= crit;
+    }
+
+    static boolean chi2AcceptNegBinomial(int[] sample, int r, double p, double alpha) {
+        List<Double> pmf = new ArrayList<>();
+        double p0 = Math.pow(p, r);
+        pmf.add(p0);
+        double tail = p0;
+        int i = 0;
+        int maxIter = 10000;
+        while (tail < 1.0 - 1e-12 && i < maxIter) {
+            double prev = pmf.get(i);
+            double next = prev * ((double) (i + r) / (i + 1)) * (1 - p);
+            pmf.add(next);
+            tail += next;
+            i++;
+            if (i > 5000) {
+                break;
+            }
+        }
+        double sumProb = 0;
+        for (double q : pmf) {
+            sumProb += q;
+        }
+        if (sumProb < 1.0) {
+            double last = pmf.get(pmf.size() - 1);
+            pmf.set(pmf.size() - 1, last + (1.0 - sumProb));
+        }
+
+        List<Bin> bins = makeBinsFromPmf(pmf, sample.length, 5.0);
+
+        int maxIndex = pmf.size() - 1;
+        int[] valToBin = new int[maxIndex + 1];
+        Arrays.fill(valToBin, -1);
+        for (int bi = 0; bi < bins.size(); bi++) {
+            for (int v = bins.get(bi).from; v <= bins.get(bi).to; v++) {
+                if (v <= maxIndex) {
+                    valToBin[v] = bi;
+                }
+            }
+        }
+        int[] obs = new int[bins.size()];
+        for (int v : sample) {
+            int bi;
+            if (v <= maxIndex) {
+                bi = valToBin[v];
+                if (bi == -1) {
+                    bi = bins.size() - 1;
+                }
+            } else {
+                bi = bins.size() - 1;
+            }
+            obs[bi]++;
+        }
+        double chi2 = 0;
+        for (int bi = 0; bi < bins.size(); bi++) {
+            double expected = bins.get(bi).prob * sample.length;
+            double o = obs[bi];
+            double diff = o - expected;
+            chi2 += diff * diff / expected;
+        }
+        int df = Math.max(1, bins.size() - 1);
+        double crit = chi2Critical(df, alpha);
+        return chi2 <= crit;
+    }
+
+    //критическое значение
+    static double chi2Critical(int df, double alpha) {
+        //альфа = 0.05
+        if (df >= 1 && df < CHI2_CRIT_95.length) {
+            return CHI2_CRIT_95[df];
+        }
+        double z95 = 1.6448536269514722; // quantile z_{0.95}
+        return df + z95 * Math.sqrt(2.0 * df);
     }
 }
