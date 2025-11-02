@@ -1,13 +1,11 @@
 import java.text.DecimalFormat;
 import java.util.Arrays;
 
-import static java.lang.Math.*;
-
 /**
  * Вариант 2
- * 1) m = -3, s^2 = 16, sigma = 4
- * <p>
- * Дополнения: лог-нормальное LN(0,4), Коши C(1,2)
+ * <p>1) m = -3, s^2 = 16, sigma = 4</p>
+ * <p>2) m = 0, s^2 = 4</p>
+ * <p>3) a = 1, b = 2</p>
  */
 public class Main {
     static final DecimalFormat F = new DecimalFormat("0.00000");
@@ -134,7 +132,7 @@ public class Main {
         double mean = mean(dist);
         double sum = 0.0;
         for (double v : dist) sum += (v - mean) * (v - mean);
-        return sum / (dist.length - 1); // несмещенная
+        return sum / (dist.length - 1);
     }
 
     static class KSTest {
@@ -199,13 +197,10 @@ public class Main {
                 else edges[i] = inverseCdf(p, distName, params);
             }
 
-            // гистограмма
             int[] obs = new int[k];
             for (double x : sample) {
-                // найти бин j такой, что edges[j] <= x < edges[j+1]
                 int j = Arrays.binarySearch(edges, x);
                 if (j >= 0) {
-                    // если точное совпадение с границей, положим в следующий бин, кроме последнего
                     j = Math.min(j, k - 1);
                 } else {
                     j = -j - 2;
@@ -262,7 +257,6 @@ public class Main {
         }
     }
 
-    // обратная функция распределения (ppf) по prob in (0,1)
     private static double inverseCdf(double prob, String distName, double[] params) {
         if ("cauchy".equals(distName)) {
             double a = params[0], b = params[1];
@@ -304,13 +298,12 @@ public class Main {
         return 0.5 * (low + high);
     }
 
-    // normal CDF через erf (Abramowitz-Stegun)
     private static double normalCdf(double x, double mean, double sigma) {
         double z = (x - mean) / (sigma * Math.sqrt(2.0));
         return 0.5 * (1.0 + erf(z));
     }
 
-    // аппроксимация erf (достаточно точная для наших нужд)
+    // аппроксимация erf
     private static double erf(double z) {
         double t = 1.0 / (1.0 + 0.5 * Math.abs(z));
         double tau = t * Math.exp(-z * z - 1.26551223 +
@@ -338,7 +331,6 @@ public class Main {
             } else if ("lognorm".equals(distName)) {
                 sample = generateLogNormal(n, g1, g2, params[0], params[1]);
             } else if ("cauchy".equals(distName)) {
-                // используем только g1
                 sample = generateCauchy(n, g1, params[0], params[1]);
             } else throw new IllegalArgumentException();
 
